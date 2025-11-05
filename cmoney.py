@@ -33,7 +33,45 @@ def saveWallet(pubkey, privkey, filename):
         file.write(privkeyString)
     return
 
-def get_tag(pubkey):
+# S transferred x to D on w
+def readline(line):
+    line = line.strip()
+    sender, _, amount, _, receiver, _, *date = line.split(" ")
+    return sender, amount, receiver, date
+
+def getBalance(tag):
+    balance = 0
+    # check blockchain
+    cur_num = 1
+    # iterate over blocks while the existing the files
+    while os.path.exists(f"block_{cur_num}.txt"):
+        with open(f"block_{cur_num}.txt") as f:
+            num_lines = sum(1 for _ in f)
+            line_list = [line for line in f]
+            for i, line in enumerate(line_list):
+                # ignore previous block tag and nonce at the bottom
+                if i == 0 or i == num_lines:
+                    continue
+                # read transaction
+                sender, amount, receiver, date = readline(line)
+                if sender == tag:
+                    balance -= int(amount)
+                if receiver == tag:
+                    balance += int(amount)
+
+            # read the block
+    # iterate over lines in the mempool
+    with open(mempool_filename, 'r') as f:
+        for line in f:
+            # read transaction
+            sender, amount, receiver, date = readline(line)
+            if sender == tag:
+                balance -= int(amount)
+            if receiver == tag:
+                balance += int(amount)
+    return balance
+
+def getTag(pubkey):
     hex_n = format(pubkey.n, 'x')
     hex_e = format(pubkey.e, 'x')
     if len(hex_e) % 2 == 1:
@@ -60,7 +98,7 @@ def main(args):
     elif args[1] == 'address':
         filepath = args[2]
         pubkey, privkey = loadWallet(filepath)
-        tag = get_tag(pubkey)
+        tag = getTag(pubkey)
         print(tag)
     elif args[1] == 'fund':
         special_id = "bank"
@@ -69,7 +107,7 @@ def main(args):
         filepath = args[4]
         transaction_time = datetime.now()
         
-        written_string = "From: {}\nTo: {}\nAmount: {}\nDate (EST): {}".format(special_id, tag, amount, transaction_time)
+        written_string = "From: {}\nTo: {}\nAmount: {}\nDate: {}".format(special_id, tag, amount, transaction_time)
 
         with open(filepath, 'w') as f:
             f.write(written_string)
@@ -82,29 +120,75 @@ def main(args):
         transaction_time = datetime.now()
 
         pubkey, privkey = loadWallet(source_wallet_fn)
-        source_tag = get_tag(pubkey)
+        source_tag = getTag(pubkey)
 
-        written_string = "From: {}\nTo: {}\nAmount: {}\nDate (EST): {}".format(source_tag, dest_wallet_tag, amount, transaction_time)
+        written_string = "From: {}\nTo: {}\nAmount: {}\nDate: {}\n".format(source_tag, dest_wallet_tag, amount, transaction_time)
         signature = hashlib.sha256(written_string.encode()).hexdigest()
         with open(filepath, 'w') as f:
-            f.write(written_string + "\n" + signature)
+            f.write(written_string + signature)
         print("Transferred {} from {} to {} and statement to {} on {}".format(amount, source_wallet_fn, dest_wallet_tag, filepath, transaction_time))
     elif args[1] == "balance":
-        # check blockchain
-        cur_num = 1
-        # iterate over blocks while they existin the files
-        while os.path.exists(f"block_{cur_num}.txt"):
-            with open(f"block_{cur_num}.txt") as f:
-                for i, line in enumerate(f):
-                    if i == 0 or i == len(f):
-                        continue
-                    # read transaction
+        tag = args[2]
+        print(getBalance(tag))
+    elif args[1] == 'verify':
+        wallet = args[2]
+        transaction = args[3]
+        
+        pubkey, privkey = loadWallet(wallet)
+        tag = getTag(pubkey)
 
-                # read the block
-        # iterate over lines in the mempool
-        with open(mempool_filename, 'r') as f:
-            for line in f:
-                # read transaction
+        balance = getBalance(tag)
+
+        sender, receiver, amount, date = 0, 0, 0, 0
+        # read the balance from the file
+        with open(transaction, 'r') as f:
+            
+            h = hashlib.sha256()
+            lines = [line for line in f]
+            num_lines = len(lines)
+            for i, line in enumerate(lines):
+
+                # check for auto case
+                if i == 0:
+                    _, sender = line.split(" ")
+                    sender = sender.strip()
+                    # auto accept
+                    if sender == "bank":
+                        sender = "bank"
+                        print(sender)
+
+                if i == 1:
+                    _, receiver = line.split(" ")
+                    receiver = receiver.strip()
+                # checking balance
+                if i == 2:
+                    _, amount = line.split(" ")
+                    amount = int(amount)
+                    if sender == 'bank':
+                        continue
+                    if balance - amount < 0:
+                        print("The transaction in file {} with wallet {} is not valid due to insufficient funds in the wallet".format(transaction, wallet))
+                        return
+                if i == 3:
+                    _, *date = line.split(" ")
+                    date = " ".join(date).strip()
+                
+                # checking hash
+                if i == num_lines - 1:
+                    if sender == 'bank':
+                        continue
+                    hash = h.hexdigest()
+                    if line.strip() != hash:
+                        print("The transaction in file {} with wallet {} is not valid due to not matching hashes".format(transaction, wallet))
+                        return
+                else:
+                    h.update(line.encode())
+        
+        # write to mempool
+        with open(mempool_filename, 'a') as f:
+            f.write("{} transferred {} to {} on {}\n".format(sender, amount, receiver, date))
+        print("The transaction in file {} with wallet {} is valid and was written to the mempool".format(transaction, wallet))
+    
 
 
 
