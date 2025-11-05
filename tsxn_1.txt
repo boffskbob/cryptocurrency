@@ -1,4 +1,0 @@
-From: bank
-To: cd13da90e12bfe27
-Amount: 100
-Date: 2025-11-05 01:02:06.368942

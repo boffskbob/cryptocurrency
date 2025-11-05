@@ -4,6 +4,15 @@ import hashlib
 import binascii
 from datetime import datetime
 import os 
+import random
+
+def hashFile(filename):
+    h = hashlib.sha256()
+    with open(filename, 'rb', buffering=0) as f:
+        for b in iter(lambda : f.read(128*1024), b''):
+            h.update(b)
+    return h.hexdigest()
+
 # given an array of bytes, return a hex reprenstation of it
 def bytesToString(data):
     return binascii.hexlify(data)
@@ -58,17 +67,18 @@ def getBalance(tag):
                     balance -= int(amount)
                 if receiver == tag:
                     balance += int(amount)
+        cur_num += 1
 
-            # read the block
     # iterate over lines in the mempool
-    with open(mempool_filename, 'r') as f:
-        for line in f:
-            # read transaction
-            sender, amount, receiver, date = readline(line)
-            if sender == tag:
-                balance -= int(amount)
-            if receiver == tag:
-                balance += int(amount)
+    if not os.path.exists(mempool_filename):
+        with open(mempool_filename, 'r') as f:
+            for line in f:
+                # read transaction
+                sender, amount, receiver, date = readline(line)
+                if sender == tag:
+                    balance -= int(amount)
+                if receiver == tag:
+                    balance += int(amount)
     return balance
 
 def getTag(pubkey):
@@ -155,7 +165,6 @@ def main(args):
                     # auto accept
                     if sender == "bank":
                         sender = "bank"
-                        print(sender)
 
                 if i == 1:
                     _, receiver = line.split(" ")
@@ -188,6 +197,51 @@ def main(args):
         with open(mempool_filename, 'a') as f:
             f.write("{} transferred {} to {} on {}\n".format(sender, amount, receiver, date))
         print("The transaction in file {} with wallet {} is valid and was written to the mempool".format(transaction, wallet))
+    elif args[1] == 'mine':
+        difficulty = int(args[2])
+
+        cur_num = 0
+        while os.path.exists(f"block_{cur_num}.txt"):
+            cur_num += 1
+
+        full_string = ""
+        
+        # hash of previous block
+        full_string += hashFile(f"block_{cur_num - 1}.txt") + "\n"
+
+        # read in mempool
+        with open(mempool_filename, "r") as f:
+            for line in f:
+                full_string += line
+        
+        nonce = -1
+        hash_val = None
+        # try nonces
+        while True:
+            nonce = int(random.getrandbits(32))
+            hash_val = hashlib.sha256((full_string + f"nonce: {nonce}").encode()).hexdigest()
+            # check against difficulty
+            if hash_val[:difficulty] == "0" * difficulty:
+                break
+        
+        with open(f"block_{cur_num}.txt", 'w') as f:
+            f.write((full_string + f"nonce: {nonce}"))
+        
+        # clear the mempool
+        open(mempool_filename, 'w').close()
+        print(f"Mempool transactions moved to block_{cur_num}.txt and mined with difficulty {difficulty} and nonce {nonce}")
+    elif args[1] == 'validate':
+        cur_num = 1
+        while os.path.exists(f"block_{cur_num}.txt"):
+            # check previous hash
+            with open(f"block_{cur_num}.txt") as f:
+                prev_hash = f.readline().strip()
+                if prev_hash != hashFile(f"block_{cur_num - 1}.txt"):
+                    print("False")
+                    return
+            cur_num += 1
+        print("True")
+
     
 
 
