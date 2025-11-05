@@ -35,8 +35,8 @@ def saveWallet(pubkey, privkey, filename):
 def get_tag(pubkey):
     hex_n = format(pubkey.n, 'x')
     hex_e = format(pubkey.e, 'x')
-    if len(hex_e) % 2 == 1:  # if odd length
-        hex_e = '0' + hex_e  # pad with leading zero
+    if len(hex_e) % 2 == 1:
+        hex_e = '0' + hex_e
     hex_str = hex_n + hex_e
     tag = hashlib.sha256(stringToBytes(hex_str)).hexdigest()[:16]
     return tag
@@ -82,10 +82,10 @@ def main(args):
         source_tag = get_tag(pubkey)
 
         written_string = "From: {}\nTo: {}\nAmount: {}\nDate (EST): {}".format(source_tag, dest_wallet_tag, amount, transaction_time)
-        hex_string = ""
-        signature = hashlib.sha256(stringToBytes(format(written_string, 'x')))
+        signature = hashlib.sha256(written_string.encode()).hexdigest()
         with open(filepath, 'w') as f:
             f.write(written_string + "\n" + signature)
+        print("Transferred {} from {} to {} and statement to {} on {}".format(amount, source_wallet_fn, dest_wallet_tag, filepath, transaction_time))
 
 
 
