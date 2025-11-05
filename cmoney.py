@@ -32,6 +32,15 @@ def saveWallet(pubkey, privkey, filename):
         file.write(privkeyString)
     return
 
+def get_tag(pubkey):
+    hex_n = format(pubkey.n, 'x')
+    hex_e = format(pubkey.e, 'x')
+    if len(hex_e) % 2 == 1:  # if odd length
+        hex_e = '0' + hex_e  # pad with leading zero
+    hex_str = hex_n + hex_e
+    tag = hashlib.sha256(stringToBytes(hex_str)).hexdigest()[:16]
+    return tag
+
 def main(args):
     if args[1] == 'name':
         print("BoffCoin")
@@ -43,20 +52,12 @@ def main(args):
         # generate RSA key pair for a wallet
         filepath = args[2]
         (pubkey, privkey) = rsa.newkeys(1024)
-        print(pubkey)
-        print(privkey)
         saveWallet(pubkey, privkey, filepath)            
         print(f"New wallet generated at {filepath}")
     elif args[1] == 'address':
         filepath = args[2]
         pubkey, privkey = loadWallet(filepath)
-
-        hex_n = format(pubkey.n, 'x')
-        hex_e = format(pubkey.e, 'x')
-        if len(hex_e) % 2 == 1:  # if odd length
-            hex_e = '0' + hex_e  # pad with leading zero
-        hex_str = hex_n + hex_e
-        tag = hashlib.sha256(stringToBytes(hex_str)).hexdigest()[:16]
+        tag = get_tag(pubkey)
         print(tag)
     elif args[1] == 'fund':
         special_id = "bank"
@@ -64,13 +65,29 @@ def main(args):
         amount = args[3]
         filepath = args[4]
         transaction_time = datetime.now()
+        
+        written_string = "From: {}\nTo: {}\nAmount: {}\nDate (EST): {}".format(special_id, tag, amount, transaction_time)
 
         with open(filepath, 'w') as f:
-            f.write(f"From: {special_id}\n")
-            f.write(f"To: {tag}\n")
-            f.write(f"Amount: {amount}\n")
-            f.write(f"Date (EST): {transaction_time}")
+            f.write(written_string)
         print(f"Funded wallet {tag} with {amount} BoffCoin on {transaction_time}")
+    elif args[1] == 'transfer':
+        source_wallet_fn = args[2]
+        dest_wallet_tag = args[3]
+        amount = args[4]
+        filepath = args[5]
+        transaction_time = datetime.now()
+
+        pubkey, privkey = loadWallet(source_wallet_fn)
+        source_tag = get_tag(pubkey)
+
+        written_string = "From: {}\nTo: {}\nAmount: {}\nDate (EST): {}".format(source_tag, dest_wallet_tag, amount, transaction_time)
+        hex_string = ""
+        signature = hashlib.sha256(stringToBytes(format(written_string, 'x')))
+        with open(filepath, 'w') as f:
+            f.write(written_string + "\n" + signature)
+
+
 
 if __name__ == "__main__":
     main(sys.argv)
