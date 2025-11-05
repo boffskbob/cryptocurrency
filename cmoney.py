@@ -2,7 +2,8 @@ import sys
 import rsa
 import hashlib
 import binascii
-from datetime import datetime, timezone
+from datetime import datetime
+import os 
 # given an array of bytes, return a hex reprenstation of it
 def bytesToString(data):
     return binascii.hexlify(data)
@@ -40,6 +41,8 @@ def get_tag(pubkey):
     hex_str = hex_n + hex_e
     tag = hashlib.sha256(stringToBytes(hex_str)).hexdigest()[:16]
     return tag
+
+mempool_filename = "mempool.txt"
 
 def main(args):
     if args[1] == 'name':
@@ -86,6 +89,22 @@ def main(args):
         with open(filepath, 'w') as f:
             f.write(written_string + "\n" + signature)
         print("Transferred {} from {} to {} and statement to {} on {}".format(amount, source_wallet_fn, dest_wallet_tag, filepath, transaction_time))
+    elif args[1] == "balance":
+        # check blockchain
+        cur_num = 1
+        # iterate over blocks while they existin the files
+        while os.path.exists(f"block_{cur_num}.txt"):
+            with open(f"block_{cur_num}.txt") as f:
+                for i, line in enumerate(f):
+                    if i == 0 or i == len(f):
+                        continue
+                    # read transaction
+
+                # read the block
+        # iterate over lines in the mempool
+        with open(mempool_filename, 'r') as f:
+            for line in f:
+                # read transaction
 
 
 
